@@ -1,34 +1,42 @@
 workflows:
-  ios-build:
-    name: iOS Build
+  ios-native-build:
+    name: iOS Native Build with Pods
+    max_build_duration: 60
     environment:
-      groups:
-        - apple_credentials
-      vars:
-        XCODE_VERSION: "26.4"
+      xcode: latest
+      cocoapods: default
     scripts:
-      - name: Install dependencies
+      # 1. 安装 iOS 依赖 (CocoaPods)
+      - name: Install iOS Pods
         script: |
-          if [ -f "Podfile" ]; then
-            pod install
+          pod install
+      
+      # 2. 使用 xcodebuild 构建并导出 IPA 包
+      - name: Build and Export IPA
+        script: |
+          # 获取工作区或工程名（如果有 .xcworkspace 则优先使用）
+          if [ -f "*.xcworkspace" ]; then
+            WORKSPACE=$(ls *.xcworkspace | head -n 1)
+            BUILD_CMD="-workspace $WORKSPACE"
+          else
+            PROJECT=$(ls *.xcodeproj | head -n 1)
+            BUILD_CMD="-project $PROJECT"
           fi
-      - name: Set up code signing
-        script: |
-          keychain initialize
-          app-store-connect fetch-signing-files $(xcode-project detect-bundle-id) \
-            --platform IOS \
-            --type IOS_APP_STORE \
-            --create
-          xcode-project use-profiles
-      - name: Build IPA
-        script: |
-          xcode-project build-ipa \
-            --workspace $(find . -name "*.xcworkspace" -type d | head -1) \
-            --scheme $(xcode-project detect-scheme)
+          
+          # 执行打包命令
+          xcodebuild build-for-testing \
+            $BUILD_CMD \
+            -scheme "YourSchemeName" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build/ios
     artifacts:
-      - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
-    # publishing:
-    #   email:
-    #     recipients:
-    #       - user@example.com
+      # 3. 指定 IPA 输出路径
+      - build/ios/**/*.ipa
+#    publishing:
+#      email:
+#        recipients:
+#          - your-email@example.com
+#        notify:
+#          success: true
+#          failure: true
